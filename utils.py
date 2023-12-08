@@ -3,13 +3,13 @@ from scipy.stats import fisher_exact
 import numpy as np 
 import os 
 import pymysql
-from dotenv import read_dotenv
+# from dotenv import read_dotenv
 
-read_dotenv()
-DB_HOST = os.getenv('DB_HOST')
-DB_USER = os.getenv('DB_USER')
-DB_PASSWORD = os.getenv('DB_PASSWORD')
-DB_NAME = os.getenv('DB_NAME')
+# read_dotenv()
+# DB_HOST = os.getenv('DB_HOST')
+# DB_USER = os.getenv('DB_USER')
+# DB_PASSWORD = os.getenv('DB_PASSWORD')
+# DB_NAME = os.getenv('DB_NAME')
 
 def get_query(k,s):
     q = f'''SELECT mapped_gene, Exp_cond_id , mapped_phosphosite FROM phospodb_nisar_profile_data WHERE Exp_cond_id IN(
@@ -22,20 +22,21 @@ def get_query_exp(k,s):
  
 
 def get_d(query):
-    connection = pymysql.connect(
-        host=DB_HOST,
-        port=3306,
-        user=DB_USER,
-        password=DB_PASSWORD,
-        database=DB_NAME,
-    )
-    cursor = connection.cursor()
-    cursor.execute(query)
-    result = cursor.fetchall()
-    df_result = pd.DataFrame(result, columns=[desc[0] for desc in cursor.description])
-    cursor.close()
-    connection.close()
-    return df_result
+    # connection = pymysql.connect(
+    #     host=DB_HOST,
+    #     port=3306,
+    #     user=DB_USER,
+    #     password=DB_PASSWORD,
+    #     database=DB_NAME,
+    # )
+    # cursor = connection.cursor()
+    # cursor.execute(query)
+    # result = cursor.fetchall()
+    # df_result = pd.DataFrame(result, columns=[desc[0] for desc in cursor.description])
+    # cursor.close()
+    # connection.close()
+    # return df_result
+    pass
 
 def get_combinations(k,s):
     li = [[k,i] for i in s]
@@ -94,22 +95,25 @@ def get_n(s1,s2,df, total):
     s2_con = set(df.at[s2,'condition_exp'])
 
     n_00 = get_n00(s1_con,s2_con,total)
-
     n_ud = get_nud(s1_con,s2_con)
     n_du = get_ndu(s1_con,s2_con)
     n_uudd = get_uudd(s1_con,s2_con)
+
+    data1 = np.array([[n_00,n_ud],[n_du,n_uudd]])
+    _ ,p_value = fisher_exact(data1, alternative = 'greater')    
+
+    data2 = np.array([[n_00,n_ud],[n_uudd,n_du]])
+    _ ,p_value_r = fisher_exact(data2, alternative = 'greater')
+
+    return n_00, n_ud, n_du, n_uudd, p_value , p_value_r
+
+
+def generate_matrix(df,k,s):
+
+    new_total_ex = set(df['Exp_cond_id'].tolist())
     
-    # data = np.array([[n_00,n_ud],[n_du,n_uudd]])
-    data = np.array([[n_00,n_ud],[n_uudd,n_du]])
+    print(len(new_total_ex))
 
-    _ ,p_value = fisher_exact(data, alternative = 'greater')    
-    
-    return n_00, n_ud, n_du, n_uudd, p_value
-
-
-def generate_matrix(df,k,s, dfe):
-
-    new_total_ex = set(dfe['Exp_cond_id'].tolist())
     df['condition_exp'] = df[['Exp_cond_id', 'expression']].apply(lambda x: '--&&--'.join(map(str, x)), axis=1)
 
     df["gene_site"] = df["mapped_genesymbol"] + '_' +df['mapped_phosphosite']
@@ -119,17 +123,19 @@ def generate_matrix(df,k,s, dfe):
     df_comb = get_combinations(k+"_"+s,sub)
 
     df = df.groupby('gene_site').agg(pd.Series.tolist).reset_index()
-    df['count'] = df["Exp_cond_id"].apply(lambda x:len(x))
-    df = df.sort_values(by=['count'], ascending=False)
 
     df.set_index("gene_site", inplace = True) 
 
-    result = df_comb.apply(lambda x:get_n(x['site1'],x['site2'], df , new_total_ex), axis = 1)
-
-    df_comb[['n_00','n_uddu_nd','n_uddu','n_uudd','p-Value']] = pd.DataFrame(result.tolist())
+    df_comb[['n_00','n_uddu_nd','n_uddu','n_uudd','p-Value','p-Value_r']] = df_comb.apply(lambda x:get_n(x['site1'],x['site2'],
+                                                                                                          df , new_total_ex),  axis = 1, result_type='expand')
 
     df_comb.drop_duplicates(inplace=True)
+    
+    df1 = df_comb[['site1','site2','n_00','n_uddu_nd','n_uddu','n_uudd','p-Value']]
+    df2 = df_comb[['site1','site2','n_00','n_uddu_nd','n_uudd','n_uddu','p-Value_r']]
+    
+    df1.sort_values(by=['p-Value'], inplace=True)
+    df2.rename({'p-Value_r':'p-Value'},axis=1, inplace = True)
+    df2.sort_values(by=['p-Value'], inplace=True)
 
-    df_comb.sort_values(by=['p-Value'], inplace=True)
-
-    return df_comb
+    return df1 , df2
