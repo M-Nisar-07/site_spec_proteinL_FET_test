@@ -1,4 +1,2 @@
 .env
-*.xlsx#
-*.xlsx
 __pycache__

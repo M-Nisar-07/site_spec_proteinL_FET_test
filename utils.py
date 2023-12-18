@@ -16,6 +16,14 @@ def get_query(k,s):
         select DISTINCT Exp_cond_id FROM phospodb_nisar_profile_data where mapped_gene ='{k}' AND mapped_phosphosite='{s}') '''
     return q
 
+def get_query_pr(k,s):
+
+    q = f'''SELECT mapped_gene, Exp_cond_id , mapped_phosphosite FROM phospodb_nisar_profile_data WHERE Exp_cond_id IN(
+        select DISTINCT Exp_cond_id FROM phospodb_nisar_profile_data where mapped_gene ='{k}' AND mapped_phosphosite='{s}') '''
+    return q
+
+
+
 def get_query_exp(k,s):
     q = f'''select DISTINCT Exp_cond_id FROM phospodb_nisar_differential_data where mapped_genesymbol ='{k}' '''
     return q
